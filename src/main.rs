@@ -32,7 +32,7 @@ struct Entry {
     chars: [char; 5],
     colors: [Color; 5],
     is_active: bool,
-    cursor: u8,
+    cursor: usize,
 }
 
 impl Default for Entry {
@@ -62,14 +62,24 @@ impl Entry {
             .spacing(5)
             .into()
     }
-    fn update(&mut self, message: Message) {}
-    fn grade(&mut self, grade_result: [(char, Color); 5]) {
-        self.colors = grade_result.map(|(_, color)| color);
-        // println!(
-        //     "Grade: {:?} {:?} {:?} {:?} {:?}",
-        //     self.colors[0], self.colors[1], self.colors[2], self.colors[3], self.colors[4]`
-        // );
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::EnterText(c) => {
+                if c.is_ascii_alphabetic() && self.cursor < 5 {
+                    self.chars[self.cursor] = c;
+                    self.cursor += 1;
+                }
+            },
+            Message::DeleteText => {
+                if self.cursor > 0 {
+                    self.cursor -= 1;
+                    self.chars[self.cursor] = ' ';
+                }
+            },
+            _ => {},
+        }
     }
+
 }
 
 // #[derive(Default)]
@@ -86,7 +96,7 @@ impl Default for EntrySet {
             entries: [Entry::default(); 6],
             strings: [[' '; 5]; 6],
             active_entry: 0,
-            secret_word: "tares".to_string(),
+            secret_word: "tares".to_string().to_ascii_uppercase(),
         };
         for i in 0..5 {
             ans.entries[0].colors[i] = *GREY;
@@ -114,7 +124,13 @@ impl EntrySet {
             .padding(Padding {top:20.0, right: 0.0, bottom: 0.0, left: 350.0})
             .into()
     }
-    fn update(&mut self, message: Message) {}
+    fn grade(&mut self, grade_result: [(char, Color); 5]) {
+        self.entries[self.active_entry].colors = grade_result.map(|(_, color)| color);
+        // println!(
+        //     "Grade: {:?} {:?} {:?} {:?} {:?}",
+        //     self.colors[0], self.colors[1], self.colors[2], self.colors[3], self.colors[4]`
+        // );
+    }
 }
 
 struct Keyboard {
@@ -162,26 +178,30 @@ impl Keyboard {
         column![row1, row2, row3].into()
     }
     fn update(&mut self, message: Message) {}
-    
+    fn grade(&mut self, grade_result: [(char, Color); 5]) {
+        for (c, color) in grade_result {
+            self.state.insert(c, color);
+        }
+    }
 }
 
 struct Title {
     text: String,
+    color: Color,
 }
 
 impl Default for Title {
     fn default() -> Self {
-        Self {text: "Wordle".to_string()}
+        Self {text: "Wordle".to_string(), color: *WHITE}
     }
 }
 
 impl Title {
     fn view(&self) -> Element<'_, Message> {
-        container(text(self.text.clone()).size(50)
+        container(text(self.text.clone()).size(50).color(self.color)
             .font(Font {weight: Weight::Bold, ..Font::default()}))
-            .padding(Padding {top: 20.0, right: 0.0, bottom: 0.0, left: 415.0}).into()
+            .center_x(1000).padding(Padding {top: 20.0, right: 0.0, bottom: 0.0, left: 0.0}).into()
     }
-    fn update(&mut self, result: GameResult) {}
 }
 
 #[derive(Default)]
@@ -195,7 +215,7 @@ impl Layout {
     fn view(&self) -> Element<'_, Message> {
         column![self.title.view(),self.entry_set.view(),self.keyboard.view()].into()
     }
-    fn grade(&self, word: [char; 5]) -> [(char, Color); 5] {
+    fn grade(&mut self, word: [char; 5]) -> [(char, Color); 5] {
         let mut ans = [('A', *GREY); 5];
         for i in 0..5 {
             ans[i].0 = word[i];
@@ -211,13 +231,30 @@ impl Layout {
     }
     fn update(&mut self, message: Message) {
         match message {
-            Message::EnterText(c) => {self.entry_set.update(message);},
-            Message::DeleteText => {self.entry_set.update(message);},
+            Message::EnterText(_c) => {self.entry_set.entries[self.entry_set.active_entry].update(message);},
+            Message::DeleteText => {self.entry_set.entries[self.entry_set.active_entry].update(message);},
             Message::Enter => {
-                let grade_result = self.grade(self.entry_set.entries[self.entry_set.active_entry].chars);
-                self.entry_set.entries[self.entry_set.active_entry].grade(grade_result);
-                self.keyboard.grade(grade_result);},
-            Message::GameOver(result) => {self.title.update(result);},
+                if !self.entry_set.entries[self.entry_set.active_entry].chars.contains(&' ') {
+                    let grade_result = self.grade(self.entry_set.entries[self.entry_set.active_entry].chars);
+                    self.entry_set.grade(grade_result);
+                    self.keyboard.grade(grade_result);
+                    if grade_result.iter().all(|(_, color)| *color == *GREEN) {
+                        self.update(Message::GameOver(GameResult::WIN));
+                    } else if self.entry_set.active_entry == 5 {
+                        self.update(Message::GameOver(GameResult::LOSE));
+                    } else {
+                        self.entry_set.active_entry += 1;
+                        self.entry_set.entries[self.entry_set.active_entry].colors = [*GREY; 5];
+                    }
+                }
+            }
+            Message::GameOver(result) => {
+                self.title.text = format!("Answer: {}", self.entry_set.secret_word);
+                match result {
+                    GameResult::WIN => self.title.color = *GREEN,
+                    GameResult::LOSE => self.title.color = *RED,
+                }
+            },
         }
     }
     fn subscription(&self) -> Subscription<Message> {

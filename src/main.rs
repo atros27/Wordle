@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::sync::LazyLock;
 use iced::{Element, Color, Padding, Subscription, keyboard};
 use iced::font::{Font, Weight};
 use iced::widget::{Container, container, row, column, text, Row};
 use iced::keyboard::{Key, Modifiers, key::Named};
+use rand::seq::IteratorRandom;
 
 pub static GREY: LazyLock<Color, fn() -> Color> = LazyLock::new(|| Color::from_rgb8(0x88, 0x88, 0x88));
 pub static DARK_GREY: LazyLock<Color, fn() -> Color> = LazyLock::new(|| Color::from_rgb8(0x44, 0x44, 0x44));
@@ -96,7 +98,11 @@ impl Default for EntrySet {
             entries: [Entry::default(); 6],
             strings: [[' '; 5]; 6],
             active_entry: 0,
-            secret_word: "tares".to_string().to_ascii_uppercase(),
+            secret_word: fs::read_to_string("sgb-words-trimmed.txt")
+                .unwrap().split('\n')
+                .choose(&mut rand::thread_rng())
+                .unwrap().to_string().to_ascii_uppercase()
+            // "tares".to_string().to_ascii_uppercase(),
         };
         for i in 0..5 {
             ans.entries[0].colors[i] = *GREY;

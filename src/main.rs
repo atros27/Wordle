@@ -1,3 +1,5 @@
+mod suggestion;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::sync::LazyLock;

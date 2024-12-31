@@ -107,8 +107,10 @@ impl Default for EntrySet {
                 .choose(&mut rand::thread_rng())
                 .unwrap().to_string().to_ascii_uppercase(),
             suggestion_word_bank: WordSet {
-                words: fs::read_to_string("sgb-words.txt")
-                .unwrap().split('\n').into_iter().map(|x| x.to_string()).collect()
+                words: fs::read_to_string("sgb-words-trimmed.txt")
+                .unwrap().split('\n').into_iter().map(|x| x.to_string()).collect(),
+                answer_words: fs::read_to_string("sgb-words-trimmed.txt")
+                    .unwrap().split('\n').into_iter().map(|x| x.to_string()).collect()
             }
         };
         //println!("Suggestion: {}",ans.suggestion_word_bank.suggest());
@@ -145,9 +147,15 @@ impl EntrySet {
         //     "Grade: {:?} {:?} {:?} {:?} {:?}",
         //     self.colors[0], self.colors[1], self.colors[2], self.colors[3], self.colors[4]`
         // );
-        let old_bank_length = self.suggestion_word_bank.words.len();
-        self.suggestion_word_bank = self.suggestion_word_bank.reduce(grade_result);
-        println!("Reduced from {} words to {} words", old_bank_length, self.suggestion_word_bank.words.len());
+        let old_bank_length = self.suggestion_word_bank.answer_words.len();
+        self.suggestion_word_bank.reduce(grade_result);
+        let new_bank_length = self.suggestion_word_bank.answer_words.len();
+        let info = ((old_bank_length as f64) / (new_bank_length as f64)).log(2.0);
+        println!("Actual Info: {:.2}",info);
+        println!("Reduced from {} words to {} words", old_bank_length, self.suggestion_word_bank.answer_words.len());
+        let guess: String = grade_result.map(|(c, color)| c).iter().collect();
+        // self.suggestion_word_bank.words.retain(|x| *x != guess);
+        // println!("Reduced from {} words to {} words", old_bank_length, self.suggestion_word_bank.reduce(grade_result).words.len());
         println!("Suggestion: {}",self.suggestion_word_bank.suggest());
     }
 }

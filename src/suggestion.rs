@@ -1,12 +1,13 @@
 use std::sync::LazyLock;
 use iced::Color;
 
-struct WordSet {
+pub(crate) struct WordSet {
     pub words: Vec<String>
 }
 
 impl WordSet {
-    fn suggest(&self) -> String {
+    pub fn suggest(&self) -> String {
+        if self.words.len() == 1 {return self.words[0].clone()}
         let mut ans = "".to_string();
         let mut peak_heuristic = 0.0;
         for guess_word in &self.words {
@@ -35,17 +36,33 @@ impl WordSet {
         }
         ans
     }
-    fn reduce(&self, grade_result: [(char, Color); 5]) -> WordSet {
+    pub fn reduce(&self, grade_result: [(char, Color); 5]) -> WordSet {
         let YELLOW = Color::from_rgb8(0xFF, 0xCE, 0x1B);
         let GREEN = Color::from_rgb8(0x04, 0x63, 0x07);
         let mut answer_set = Vec::new();
         for word in &self.words {
-             if word.chars().zip(grade_result).all(|(word_char, (guess_char, color))| 
-            match color {
-                GREEN => word_char == guess_char,
-                YELLOW => word.contains(guess_char),
-                _ => !word.contains(guess_char)
-            }) {answer_set.push(word.clone());}
+            // println!("WORD: {}",&word);
+            let mut passes_check = true;
+            for i in 0..5 {
+                match grade_result[i].1 {
+                    color if color == GREEN => {
+                        if word.chars().nth(i) != Some(grade_result[i].0.to_ascii_lowercase()) {passes_check = false;break}
+                    },
+                    color if color == YELLOW => {
+                        if !word.contains(grade_result[i].0.to_ascii_lowercase()) {passes_check = false;break}
+                    },
+                    _ => {
+                        if word.contains(grade_result[i].0.to_ascii_lowercase()) {passes_check = false;break}
+                    },
+                }
+            }
+            if passes_check {answer_set.push(word.clone());}
+            //  if word.chars().zip(grade_result).all(|(word_char, (guess_char, color))| 
+            // match color {
+            //     color if color == GREEN => word_char == guess_char,
+            //     color if color == YELLOW => word.contains(guess_char),
+            //     _ => !word.contains(guess_char)
+            // }) {answer_set.push(word.clone());}
         }
         WordSet {words: answer_set}
     }

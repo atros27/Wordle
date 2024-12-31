@@ -1,4 +1,5 @@
 mod suggestion;
+use crate::suggestion::WordSet;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -92,6 +93,7 @@ struct EntrySet {
     strings: [[char; 5]; 6],
     active_entry: usize,
     secret_word: String,
+    suggestion_word_bank: WordSet,
 }
 
 impl Default for EntrySet {
@@ -103,9 +105,14 @@ impl Default for EntrySet {
             secret_word: fs::read_to_string("sgb-words-trimmed.txt")
                 .unwrap().split('\n')
                 .choose(&mut rand::thread_rng())
-                .unwrap().to_string().to_ascii_uppercase()
-            // "tares".to_string().to_ascii_uppercase(),
+                .unwrap().to_string().to_ascii_uppercase(),
+            suggestion_word_bank: WordSet {
+                words: fs::read_to_string("sgb-words.txt")
+                .unwrap().split('\n').into_iter().map(|x| x.to_string()).collect()
+            }
         };
+        //println!("Suggestion: {}",ans.suggestion_word_bank.suggest());
+        println!("Suggestion: tares");
         for i in 0..5 {
             ans.entries[0].colors[i] = *GREY;
         }
@@ -138,6 +145,10 @@ impl EntrySet {
         //     "Grade: {:?} {:?} {:?} {:?} {:?}",
         //     self.colors[0], self.colors[1], self.colors[2], self.colors[3], self.colors[4]`
         // );
+        let old_bank_length = self.suggestion_word_bank.words.len();
+        self.suggestion_word_bank = self.suggestion_word_bank.reduce(grade_result);
+        println!("Reduced from {} words to {} words", old_bank_length, self.suggestion_word_bank.words.len());
+        println!("Suggestion: {}",self.suggestion_word_bank.suggest());
     }
 }
 

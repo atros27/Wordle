@@ -5,7 +5,7 @@ use iced::alignment::Horizontal;
 use iced::font::{Font, Weight};
 use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{Column, Container, Row, button, column, container, row, stack, text};
-use iced::{Color, Element, Padding, Renderer, Subscription, Theme, keyboard};
+use iced::{color, Color, Element, Padding, Renderer, Subscription, Theme, keyboard};
 use rand::seq::IteratorRandom;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
@@ -177,16 +177,18 @@ impl EntrySet {
         //     "Grade: {:?} {:?} {:?} {:?} {:?}",
         //     self.colors[0], self.colors[1], self.colors[2], self.colors[3], self.colors[4]`
         // );
-        let old_bank_length = self.suggestion_word_bank.answer_words.len();
-        self.suggestion_word_bank.reduce(grade_result);
-        let new_bank_length = self.suggestion_word_bank.answer_words.len();
-        let info = ((old_bank_length as f64) / (new_bank_length as f64)).log(2.0);
-        println!("Actual Info: {:.2}", info);
-        println!(
-            "Reduced from {} words to {} words",
-            old_bank_length,
-            self.suggestion_word_bank.answer_words.len()
-        );
+        
+        // let old_bank_length = self.suggestion_word_bank.answer_words.len();
+        // self.suggestion_word_bank.reduce(grade_result);
+        // let new_bank_length = self.suggestion_word_bank.answer_words.len();
+        // let info = ((old_bank_length as f64) / (new_bank_length as f64)).log(2.0);
+        // println!("Actual Info: {:.2}", info);
+        // println!(
+        //     "Reduced from {} words to {} words",
+        //     old_bank_length,
+        //     self.suggestion_word_bank.answer_words.len()
+        // );
+        
         //let guess: String = grade_result.map(|(c, color)| c).iter().collect();
         // self.suggestion_word_bank.words.retain(|x| *x != guess);
         // println!("Reduced from {} words to {} words", old_bank_length, self.suggestion_word_bank.reduce(grade_result).words.len());
@@ -304,8 +306,8 @@ impl Default for SuggestionButton {
     fn default() -> Self {
         //SuggestionButton { text: "Hide Suggestions".to_string(), setting: true }
         SuggestionButton {
-            text: "Show Suggestions".to_string(),
-            setting: false,
+            text: "Hide Suggestions".to_string(),
+            setting: true,
         }
     }
 }
@@ -421,7 +423,7 @@ struct AnalysisBox {
     skill_values: [AnalysisFigure; 6],
     luck_values: [AnalysisFigure; 6],
     is_displayed: bool,
-    heuristic_table: HashMap<String, f64>
+    //heuristic_table: HashMap<String, f64>
 }
 
 impl Default for AnalysisBox {
@@ -430,7 +432,7 @@ impl Default for AnalysisBox {
             skill_values: [AnalysisFigure::Inactive; 6],
             luck_values: [AnalysisFigure::Inactive; 6],
             is_displayed: true,
-            heuristic_table: HashMap::new()
+            //heuristic_table: HashMap::new()
         }
     }
 }
@@ -445,8 +447,8 @@ impl AnalysisBox {
                     .iter()
                     .zip(self.luck_values)
                     .map(|(&sv, lv)| {
-                        row![container(text(format!("{:.2}",sv)).size(20)),
-                            container(text(format!("{:.2}",lv)).size(20))
+                        row![container(text(format!("{:.2}",sv)).size(20).color(color!(0x00ff00))),
+                            container(text(format!("{:.2}",lv)).size(20).color(color!(0xff0000)))
                         .padding(Padding {top: 0.0, right: 0.0, bottom: 0.0, left: 40.0})]
                             .padding(Padding {
                                 top: 40.0,
@@ -467,13 +469,15 @@ impl AnalysisBox {
                 .into()
         } else {container(text("")).into()}
     }
-    fn update(&mut self, word: String, word_num: usize) {
-        if self.heuristic_table.contains_key(&word) {
-            let heuristic_value = self.heuristic_table.get(&word).unwrap();
-            self.skill_values[word_num] = AnalysisFigure::Active(*heuristic_value);
-        } else {
-            self.skill_values[word_num] = AnalysisFigure::Unknown;
-        }
+    fn update(&mut self, word: String, word_num: usize, skill: AnalysisFigure, info: f64) {
+        // if self.heuristic_table.contains_key(&word) {
+        //     let heuristic_value = self.heuristic_table.get(&word).unwrap();
+        //     self.skill_values[word_num] = AnalysisFigure::Active(*heuristic_value);
+        // } else {
+        //     self.skill_values[word_num] = AnalysisFigure::Unknown;
+        // }
+        self.skill_values[word_num] = skill;
+        self.luck_values[word_num] = AnalysisFigure::Active(info);
     }
 }
 
@@ -498,11 +502,11 @@ impl Default for Layout {
             analysis_button: AnalysisButton::default(),
             analysis_box: AnalysisBox::default()
         };
-        (ans.suggestion_box.suggestion, ans.analysis_box.heuristic_table) = ans
-            .entry_set
-            .suggestion_word_bank
-            .suggest();
-        //ans.suggestion_box.suggestion = "tares".to_ascii_uppercase();
+        // (ans.suggestion_box.suggestion, ans.analysis_box.heuristic_table) = ans
+        //     .entry_set
+        //     .suggestion_word_bank
+        //     .suggest();
+        ans.suggestion_box.suggestion = "tares".to_ascii_uppercase();
         ans.suggestion_box.set_box(ans.suggestion_button.setting);
         ans
     }
@@ -554,13 +558,23 @@ impl Layout {
                     .chars
                     .contains(&' ')
                 {
+                    let word: String = self.entry_set.entries[self.entry_set.active_entry].chars.iter().collect();
+                    let exp_info = self.entry_set.suggestion_word_bank.test_entry(word.to_ascii_lowercase());
+                    let old_bank_length = self.entry_set.suggestion_word_bank.answer_words.len();
+                    
                     let grade_result =
                         self.grade(self.entry_set.entries[self.entry_set.active_entry].chars);
                     self.entry_set.grade(grade_result);
                     self.keyboard.grade(grade_result);
+                    
+                    self.entry_set.suggestion_word_bank.reduce(grade_result);
+                    let new_bank_length = self.entry_set.suggestion_word_bank.answer_words.len();
+                    let info = ((old_bank_length as f64) / (new_bank_length as f64)).log(2.0);
+                    println!("Actual Info: {:.2}", info);
+                    
                     let word: String = grade_result.iter().map(|(c, Color)| c).collect();
-                    self.analysis_box.update(word, self.entry_set.active_entry);
-                    (self.suggestion_box.suggestion, self.analysis_box.heuristic_table) = self
+                    self.analysis_box.update(word.clone(), self.entry_set.active_entry, exp_info, info);
+                    self.suggestion_box.suggestion = self
                         .entry_set
                         .suggestion_word_bank
                         .suggest();

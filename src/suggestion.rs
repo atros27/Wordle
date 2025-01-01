@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::LazyLock;
 use iced::Color;
 
@@ -7,8 +8,13 @@ pub(crate) struct WordSet {
 }
 
 impl WordSet {
-    pub fn suggest(&self) -> String {
-        if self.answer_words.len() == 1 {return self.answer_words[0].clone()}
+    pub fn suggest(&self) -> (String, HashMap<String,f64>) {
+        if self.answer_words.len() == 1 {
+            let answer = self.answer_words[0].clone().to_ascii_uppercase(); 
+            let mut map = HashMap::new();
+            map.insert(answer.clone(), 1.0);
+            return (answer, map)}
+        let mut heuristic_table = HashMap::new();
         let mut ans = "".to_string();
         let mut peak_heuristic = 0.0;
         for guess_word in &self.words {
@@ -29,6 +35,7 @@ impl WordSet {
                 let p = (probability[i] as f64) / (self.answer_words.len() as f64);
                 if probability[i] > 0 {exp_info += p * (1.0 / p).log(2.0)}
             }
+            heuristic_table.insert(guess_word.clone().to_ascii_uppercase(), exp_info);
             if exp_info > peak_heuristic {
                 println!("{:.2}",&exp_info);
                 peak_heuristic = exp_info;
@@ -36,14 +43,12 @@ impl WordSet {
             }
         }
         println!("Expected Info: {:.2}",peak_heuristic);
-        ans
+        (ans.to_ascii_uppercase(), heuristic_table)
     }
     pub fn reduce(&mut self, grade_result: [(char, Color); 5]) {
         let YELLOW = Color::from_rgb8(0xFF, 0xCE, 0x1B);
         let GREEN = Color::from_rgb8(0x04, 0x63, 0x07);
         let mut answer_set = Vec::new();
-        let guess: String = grade_result.map(|(c, color)| c).iter().collect();
-        self.words.retain(|x| *x != guess);
         for word in &self.answer_words {
             // println!("WORD: {}",&word);
             let mut passes_check = true;
@@ -56,7 +61,8 @@ impl WordSet {
                             if word.chars().nth(i) != Some(grade_result[i].0.to_ascii_lowercase()) {passes_check = false;break}
                         },
                         color if color == YELLOW => {
-                            if !word.contains(grade_result[i].0.to_ascii_lowercase()) {passes_check = false;break}
+                            if !word.contains(grade_result[i].0.to_ascii_lowercase()) ||
+                                word.chars().nth(i) == Some(grade_result[i].0.to_ascii_lowercase()) {passes_check = false;break}
                         },
                         _ => {
                             if word.contains(grade_result[i].0.to_ascii_lowercase()) {passes_check = false;break}

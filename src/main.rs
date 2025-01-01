@@ -7,7 +7,8 @@ use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{Column, Container, Row, button, column, container, row, stack, text};
 use iced::{Color, Element, Padding, Renderer, Subscription, Theme, keyboard};
 use rand::seq::IteratorRandom;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::{Display, Formatter};
 use std::fs;
 use std::sync::LazyLock;
 
@@ -39,6 +40,7 @@ enum Message {
     Enter,
     GameOver(GameResult),
     ToggleSuggest,
+    ToggleAnalysis
 }
 
 #[derive(Copy, Clone)]
@@ -185,7 +187,7 @@ impl EntrySet {
             old_bank_length,
             self.suggestion_word_bank.answer_words.len()
         );
-        let guess: String = grade_result.map(|(c, color)| c).iter().collect();
+        //let guess: String = grade_result.map(|(c, color)| c).iter().collect();
         // self.suggestion_word_bank.words.retain(|x| *x != guess);
         // println!("Reduced from {} words to {} words", old_bank_length, self.suggestion_word_bank.reduce(grade_result).words.len());
 
@@ -380,7 +382,7 @@ impl Default for AnalysisButton {
 impl AnalysisButton {
     fn view(&self) -> Element<'_, Message> {
         container(
-            button(text(self.text.clone()).size(20).color(*WHITE)).on_press(Message::ToggleSuggest),
+            button(text(self.text.clone()).size(20).color(*WHITE)).on_press(Message::ToggleAnalysis),
         )
         .padding(Padding {
             top: 5.0,
@@ -399,17 +401,36 @@ impl AnalysisButton {
         }
     }
 }
+#[derive(Copy, Clone)]
+enum AnalysisFigure {
+    Inactive,
+    Active(f64),
+    Unknown,
+}
+impl Display for AnalysisFigure {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AnalysisFigure::Inactive => write!(f, " "),
+            AnalysisFigure::Active(x) => write!(f, "{:.2}", x),
+            AnalysisFigure::Unknown => write!(f, "?"),
+        }
+    }
+}
 
 struct AnalysisBox {
-    skill_values: [f64; 6],
-    luck_values: [f64; 6],
+    skill_values: [AnalysisFigure; 6],
+    luck_values: [AnalysisFigure; 6],
+    is_displayed: bool,
+    heuristic_table: HashMap<String, f64>
 }
 
 impl Default for AnalysisBox {
     fn default() -> Self {
         AnalysisBox {
-            skill_values: [0.0; 6],
-            luck_values: [0.0; 6],
+            skill_values: [AnalysisFigure::Inactive; 6],
+            luck_values: [AnalysisFigure::Inactive; 6],
+            is_displayed: true,
+            heuristic_table: HashMap::new()
         }
     }
 }
@@ -418,25 +439,41 @@ impl AnalysisBox {
         // let sv = 0.0;
         // let lv = 0.0;
         // row![container(text(format!("{:.2}        {1:.2}",sv,lv)))].into()
-        Column::from_vec(
-            self.skill_values
-                .iter()
-                .zip(self.luck_values)
-                .map(|(&sv, lv)| {
-                    container(text(format!("{:.2}        {1:.2}", sv, lv)))
-                        .width(1000)
-                        .align_x(Horizontal::Right)
-                        .padding(Padding {
-                            top: 5.0,
-                            right: 100.0,
-                            bottom: 0.0,
-                            left: 0.0,
-                        })
-                        .into()
-                })
-                .collect(),
-        )
-        .into()
+        if self.is_displayed {
+            Column::from_vec(
+                self.skill_values
+                    .iter()
+                    .zip(self.luck_values)
+                    .map(|(&sv, lv)| {
+                        row![container(text(format!("{:.2}",sv)).size(20)),
+                            container(text(format!("{:.2}",lv)).size(20))
+                        .padding(Padding {top: 0.0, right: 0.0, bottom: 0.0, left: 40.0})]
+                            .padding(Padding {
+                                top: 40.0,
+                                right: 0.0,
+                                bottom: 0.0,
+                                left: 0.0,
+                            })
+                            .into()
+                    })
+                    .collect(),
+            ).width(1000).align_x(Horizontal::Right)
+                .padding(Padding {
+                top: 80.0,
+                right: 220.0,
+                bottom: 0.0,
+                left: 0.0
+            })
+                .into()
+        } else {container(text("")).into()}
+    }
+    fn update(&mut self, word: String, word_num: usize) {
+        if self.heuristic_table.contains_key(&word) {
+            let heuristic_value = self.heuristic_table.get(&word).unwrap();
+            self.skill_values[word_num] = AnalysisFigure::Active(*heuristic_value);
+        } else {
+            self.skill_values[word_num] = AnalysisFigure::Unknown;
+        }
     }
 }
 
@@ -461,7 +498,11 @@ impl Default for Layout {
             analysis_button: AnalysisButton::default(),
             analysis_box: AnalysisBox::default()
         };
-        ans.suggestion_box.suggestion = "tares".to_ascii_uppercase();
+        (ans.suggestion_box.suggestion, ans.analysis_box.heuristic_table) = ans
+            .entry_set
+            .suggestion_word_bank
+            .suggest();
+        //ans.suggestion_box.suggestion = "tares".to_ascii_uppercase();
         ans.suggestion_box.set_box(ans.suggestion_button.setting);
         ans
     }
@@ -517,11 +558,12 @@ impl Layout {
                         self.grade(self.entry_set.entries[self.entry_set.active_entry].chars);
                     self.entry_set.grade(grade_result);
                     self.keyboard.grade(grade_result);
-                    self.suggestion_box.suggestion = self
+                    let word: String = grade_result.iter().map(|(c, Color)| c).collect();
+                    self.analysis_box.update(word, self.entry_set.active_entry);
+                    (self.suggestion_box.suggestion, self.analysis_box.heuristic_table) = self
                         .entry_set
                         .suggestion_word_bank
-                        .suggest()
-                        .to_ascii_uppercase();
+                        .suggest();
                     self.suggestion_box.set_box(self.suggestion_button.setting);
                     if grade_result.iter().all(|(_, color)| *color == *GREEN) {
                         self.update(Message::GameOver(GameResult::WIN));
@@ -543,6 +585,10 @@ impl Layout {
             Message::ToggleSuggest => {
                 self.suggestion_button.toggle();
                 self.suggestion_box.set_box(self.suggestion_button.setting);
+            }
+            Message::ToggleAnalysis => {
+                self.analysis_button.toggle();
+                self.analysis_box.is_displayed = self.analysis_button.setting;
             }
         }
     }
